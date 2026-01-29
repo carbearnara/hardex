@@ -2,7 +2,7 @@ import { useState, useEffect, useCallback, useRef } from 'react';
 import type { AssetId, PriceData, PriceHistory } from '../types';
 import { useServiceWorker } from './useServiceWorker';
 
-const API_BASE = '/api';
+const API_BASE = import.meta.env.VITE_ORACLE_API_URL || '/api';
 const POLL_INTERVAL = 5000; // 5 seconds for foreground polling
 const MAX_HISTORY_POINTS = 360; // 30 minutes at 5s intervals
 const CACHE_KEY_HISTORY = 'hardex_price_history';
