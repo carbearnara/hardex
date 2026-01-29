@@ -25,6 +25,28 @@ export function createChainlinkAdapter(options: AdapterOptions): express.Applica
   // Middleware
   app.use(express.json());
 
+  // CORS middleware - allow dashboard to fetch from this API
+  app.use((req: Request, res: Response, next: NextFunction) => {
+    const allowedOrigins = [
+      'https://dashboard-mocha-seven-59.vercel.app',
+      'http://localhost:5173',
+      'http://localhost:3000',
+    ];
+    const origin = req.headers.origin;
+
+    if (origin && allowedOrigins.includes(origin)) {
+      res.setHeader('Access-Control-Allow-Origin', origin);
+    }
+
+    res.setHeader('Access-Control-Allow-Methods', 'GET, POST, OPTIONS');
+    res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Authorization');
+
+    if (req.method === 'OPTIONS') {
+      return res.sendStatus(200);
+    }
+    next();
+  });
+
   // Request logging
   app.use((req: Request, res: Response, next: NextFunction) => {
     logger.debug(`${req.method} ${req.path}`);
