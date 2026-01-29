@@ -11,6 +11,7 @@ import {
 import { rentalRouter } from '../api/rental.js';
 import { createLogger } from '../utils/logger.js';
 import { fetchViaScraperApi, isScraperApiConfigured } from '../adapters/scraper-utils.js';
+import * as cheerio from 'cheerio';
 
 const logger = createLogger('chainlink-adapter');
 
@@ -114,13 +115,42 @@ export function createChainlinkAdapter(options: AdapterOptions): express.Applica
       const jsonLdMatch = html.match(/<script type="application\/ld\+json">([\s\S]*?)<\/script>/);
       const hasJsonLd = !!jsonLdMatch;
 
+      // Try to actually parse items like the scraper does
+      const $ = cheerio.load(html);
+      const items: { name: string; price: string; priceNum: number }[] = [];
+
+      $('.item-cell, .item-container').each((_, element) => {
+        const $item = $(element);
+        const name = $item.find('.item-title, a.item-title').first().text().trim();
+
+        // Get price
+        const priceStrong = $item.find('.price-current strong').text();
+        const priceSup = $item.find('.price-current sup').text();
+        const priceText = $item.find('.price-current').text();
+
+        let priceNum = 0;
+        if (priceStrong) {
+          const dollars = priceStrong.replace(/[^0-9]/g, '');
+          const cents = priceSup.replace(/[^0-9]/g, '') || '00';
+          priceNum = parseFloat(`${dollars}.${cents}`);
+        }
+
+        if (name && name.length > 10) {
+          items.push({
+            name: name.substring(0, 80),
+            price: priceText.substring(0, 20),
+            priceNum,
+          });
+        }
+      });
+
       res.json({
         status: result.status,
         dataLength: html.length,
         selectors,
+        itemsFound: items.length,
+        items: items.slice(0, 5),
         priceMatches,
-        hasJsonLd,
-        htmlSample: html.substring(0, 500),
       });
     } catch (error) {
       res.json({ error: String(error) });
