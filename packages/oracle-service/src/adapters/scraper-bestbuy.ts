@@ -12,6 +12,8 @@ import {
   fetchWithRetry,
   sleep,
   getRandomDelay,
+  isScraperApiConfigured,
+  fetchViaScraperApi,
 } from './scraper-utils.js';
 import type { ScraperAdapterOptions } from './scraper-newegg.js';
 
@@ -135,31 +137,51 @@ export class BestBuyScraperAdapter implements PriceAdapter {
     const prices: PricePoint[] = [];
 
     try {
-      // First, visit homepage to establish session
-      await this.client.get('https://www.bestbuy.com/', {
-        headers: getBrowserHeaders(),
-      });
+      let htmlData: string;
 
-      await sleep(getRandomDelay(800, 1500));
+      // Use ScraperAPI if configured
+      if (isScraperApiConfigured()) {
+        logger.info(`Using ScraperAPI for Best Buy ${assetId}`);
+        const response = await fetchViaScraperApi(url, {
+          renderJs: true, // Best Buy needs JS rendering
+          country: 'us',
+        });
 
-      // Now fetch search results
-      const response = await fetchWithRetry(
-        this.client,
-        url,
-        {
-          headers: {
-            ...getBrowserHeaders('https://www.bestbuy.com/'),
-            'Cookie': generateSessionCookies('bestbuy.com'),
+        if (response.status !== 200) {
+          throw new AdapterError(this.name, 'SCRAPER_API_ERROR', `ScraperAPI returned ${response.status}`);
+        }
+
+        htmlData = response.data;
+      } else {
+        // Direct scraping fallback
+        // First, visit homepage to establish session
+        await this.client.get('https://www.bestbuy.com/', {
+          headers: getBrowserHeaders(),
+        });
+
+        await sleep(getRandomDelay(800, 1500));
+
+        // Now fetch search results
+        const response = await fetchWithRetry(
+          this.client,
+          url,
+          {
+            headers: {
+              ...getBrowserHeaders('https://www.bestbuy.com/'),
+              'Cookie': generateSessionCookies('bestbuy.com'),
+            },
           },
-        },
-        3
-      );
+          3
+        );
 
-      if (response.status === 403) {
-        throw new AdapterError(this.name, 'BLOCKED', 'Best Buy blocked the request');
+        if (response.status === 403) {
+          throw new AdapterError(this.name, 'BLOCKED', 'Best Buy blocked the request');
+        }
+
+        htmlData = response.data;
       }
 
-      const $ = cheerio.load(response.data);
+      const $ = cheerio.load(htmlData);
 
       // Try multiple selector patterns
       const selectors = [

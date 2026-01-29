@@ -17,7 +17,7 @@ export const ASSET_IDS = AssetIdSchema.options;
 
 const ConfigSchema = z.object({
   port: z.coerce.number().default(8080),
-  updateIntervalMs: z.coerce.number().default(30000),
+  updateIntervalMs: z.coerce.number().default(3600000), // 1 hour default
   priceChangeThreshold: z.coerce.number().default(0.005),
   twapWindowMs: z.coerce.number().default(300000),
   apis: z.object({

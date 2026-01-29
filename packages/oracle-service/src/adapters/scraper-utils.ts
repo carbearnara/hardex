@@ -330,3 +330,123 @@ export async function fetchWithRetry(
 
   throw lastError || new Error('Max retries exceeded');
 }
+
+// ============================================
+// ScraperAPI Integration
+// ============================================
+
+const SCRAPER_API_BASE = 'http://api.scraperapi.com';
+
+/**
+ * Check if ScraperAPI is configured
+ */
+export function isScraperApiConfigured(): boolean {
+  return !!process.env.SCRAPER_API_KEY;
+}
+
+/**
+ * Get ScraperAPI key from environment
+ */
+export function getScraperApiKey(): string | null {
+  return process.env.SCRAPER_API_KEY || null;
+}
+
+/**
+ * Build ScraperAPI URL for a target URL
+ */
+export function buildScraperApiUrl(targetUrl: string, options?: {
+  renderJs?: boolean;
+  country?: string;
+  premium?: boolean;
+}): string {
+  const apiKey = getScraperApiKey();
+  if (!apiKey) {
+    throw new Error('SCRAPER_API_KEY not configured');
+  }
+
+  const params = new URLSearchParams({
+    api_key: apiKey,
+    url: targetUrl,
+  });
+
+  if (options?.renderJs) {
+    params.set('render', 'true');
+  }
+  if (options?.country) {
+    params.set('country_code', options.country);
+  }
+  if (options?.premium) {
+    params.set('premium', 'true');
+  }
+
+  return `${SCRAPER_API_BASE}?${params.toString()}`;
+}
+
+/**
+ * Fetch URL through ScraperAPI
+ */
+export async function fetchViaScraperApi(
+  targetUrl: string,
+  options?: {
+    renderJs?: boolean;
+    country?: string;
+    premium?: boolean;
+    timeout?: number;
+  }
+): Promise<{ data: string; status: number }> {
+  const scraperUrl = buildScraperApiUrl(targetUrl, options);
+
+  const response = await axios.get(scraperUrl, {
+    timeout: options?.timeout || 60000, // ScraperAPI can be slow
+    validateStatus: () => true,
+  });
+
+  return {
+    data: response.data,
+    status: response.status,
+  };
+}
+
+/**
+ * Create a client that uses ScraperAPI for all requests
+ */
+export function createScraperApiClient(): AxiosInstance {
+  const client = axios.create({
+    timeout: 60000,
+    validateStatus: () => true,
+  });
+
+  // Intercept requests and route through ScraperAPI
+  client.interceptors.request.use((config) => {
+    const apiKey = getScraperApiKey();
+    if (!apiKey) {
+      return config; // Fall back to direct request
+    }
+
+    // Build the full target URL
+    const targetUrl = config.baseURL
+      ? `${config.baseURL}${config.url}`
+      : config.url;
+
+    if (!targetUrl) {
+      return config;
+    }
+
+    // Replace with ScraperAPI URL
+    const params = new URLSearchParams({
+      api_key: apiKey,
+      url: targetUrl,
+    });
+
+    config.baseURL = undefined;
+    config.url = `${SCRAPER_API_BASE}?${params.toString()}`;
+
+    // Remove headers that ScraperAPI doesn't need
+    config.headers.delete('User-Agent');
+    config.headers.delete('Cookie');
+
+    return config;
+  });
+
+  return client;
+}

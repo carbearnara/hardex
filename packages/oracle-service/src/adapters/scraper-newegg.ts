@@ -12,6 +12,8 @@ import {
   fetchWithRetry,
   sleep,
   getRandomDelay,
+  isScraperApiConfigured,
+  fetchViaScraperApi,
 } from './scraper-utils.js';
 
 const logger = createLogger('newegg-scraper');
@@ -50,31 +52,51 @@ export class NeweggScraperAdapter implements PriceAdapter {
     const prices: PricePoint[] = [];
 
     try {
-      // First establish session with homepage
-      await this.client.get('https://www.newegg.com/', {
-        headers: getBrowserHeaders(),
-      });
+      let htmlData: string;
 
-      await sleep(getRandomDelay(500, 1200));
+      // Use ScraperAPI if configured, otherwise fall back to direct scraping
+      if (isScraperApiConfigured()) {
+        logger.info(`Using ScraperAPI for Newegg ${assetId}`);
+        const response = await fetchViaScraperApi(url, {
+          renderJs: false,
+          country: 'us',
+        });
 
-      // Fetch search results
-      const response = await fetchWithRetry(
-        this.client,
-        url,
-        {
-          headers: {
-            ...getBrowserHeaders('https://www.newegg.com/'),
-            'Cookie': generateSessionCookies('newegg.com'),
+        if (response.status !== 200) {
+          throw new AdapterError(this.name, 'SCRAPER_API_ERROR', `ScraperAPI returned ${response.status}`);
+        }
+
+        htmlData = response.data;
+      } else {
+        // Direct scraping fallback
+        // First establish session with homepage
+        await this.client.get('https://www.newegg.com/', {
+          headers: getBrowserHeaders(),
+        });
+
+        await sleep(getRandomDelay(500, 1200));
+
+        // Fetch search results
+        const response = await fetchWithRetry(
+          this.client,
+          url,
+          {
+            headers: {
+              ...getBrowserHeaders('https://www.newegg.com/'),
+              'Cookie': generateSessionCookies('newegg.com'),
+            },
           },
-        },
-        3
-      );
+          3
+        );
 
-      if (response.status === 403 || response.status === 429) {
-        throw new AdapterError(this.name, 'BLOCKED', `Newegg returned ${response.status}`);
+        if (response.status === 403 || response.status === 429) {
+          throw new AdapterError(this.name, 'BLOCKED', `Newegg returned ${response.status}`);
+        }
+
+        htmlData = response.data;
       }
 
-      const $ = cheerio.load(response.data);
+      const $ = cheerio.load(htmlData);
 
       // Newegg uses various layouts - try multiple selectors
       const itemSelectors = [

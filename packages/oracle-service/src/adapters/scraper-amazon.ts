@@ -10,6 +10,8 @@ import {
   getBrowserHeaders,
   sleep,
   getRandomDelay,
+  isScraperApiConfigured,
+  fetchViaScraperApi,
 } from './scraper-utils.js';
 import type { ScraperAdapterOptions } from './scraper-newegg.js';
 
@@ -45,31 +47,51 @@ export class AmazonScraperAdapter implements PriceAdapter {
     const prices: PricePoint[] = [];
 
     try {
-      // Amazon is aggressive about blocking - warm up with homepage
-      await this.client.get('https://www.amazon.com/', {
-        headers: {
-          ...getBrowserHeaders(),
-          'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,*/*;q=0.8',
-        },
-      });
+      let html: string;
 
-      await sleep(getRandomDelay(1500, 3000));
+      // Use ScraperAPI if configured
+      if (isScraperApiConfigured()) {
+        logger.info(`Using ScraperAPI for Amazon ${assetId}`);
+        const response = await fetchViaScraperApi(url, {
+          renderJs: false,
+          country: 'us',
+          premium: true, // Amazon often needs premium proxies
+        });
 
-      // Now try search
-      const response = await this.client.get(url, {
-        headers: {
-          ...getBrowserHeaders('https://www.amazon.com/'),
-          'Cookie': this.generateAmazonCookies(),
-        },
-        maxRedirects: 5,
-      });
+        if (response.status !== 200) {
+          throw new AdapterError(this.name, 'SCRAPER_API_ERROR', `ScraperAPI returned ${response.status}`);
+        }
 
-      // Check if we got a CAPTCHA or block
-      if (response.status !== 200) {
-        throw new AdapterError(this.name, 'BLOCKED', `Amazon returned ${response.status}`);
+        html = response.data;
+      } else {
+        // Direct scraping fallback
+        // Amazon is aggressive about blocking - warm up with homepage
+        await this.client.get('https://www.amazon.com/', {
+          headers: {
+            ...getBrowserHeaders(),
+            'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,*/*;q=0.8',
+          },
+        });
+
+        await sleep(getRandomDelay(1500, 3000));
+
+        // Now try search
+        const response = await this.client.get(url, {
+          headers: {
+            ...getBrowserHeaders('https://www.amazon.com/'),
+            'Cookie': this.generateAmazonCookies(),
+          },
+          maxRedirects: 5,
+        });
+
+        // Check if we got a CAPTCHA or block
+        if (response.status !== 200) {
+          throw new AdapterError(this.name, 'BLOCKED', `Amazon returned ${response.status}`);
+        }
+
+        html = response.data;
       }
 
-      const html = response.data;
       if (html.includes('Enter the characters you see below') ||
           html.includes('api-services-support@amazon.com')) {
         throw new AdapterError(this.name, 'CAPTCHA', 'Amazon CAPTCHA detected');

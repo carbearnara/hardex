@@ -10,6 +10,8 @@ import {
   getBrowserHeaders,
   sleep,
   getRandomDelay,
+  isScraperApiConfigured,
+  fetchViaScraperApi,
 } from './scraper-utils.js';
 import type { ScraperAdapterOptions } from './scraper-newegg.js';
 
@@ -45,24 +47,44 @@ export class BHPhotoScraperAdapter implements PriceAdapter {
     const prices: PricePoint[] = [];
 
     try {
-      // B&H is generally more permissive but still warm up
-      await this.client.get('https://www.bhphotovideo.com/', {
-        headers: getBrowserHeaders(),
-      });
+      let htmlData: string;
 
-      await sleep(getRandomDelay(800, 1500));
+      // Use ScraperAPI if configured
+      if (isScraperApiConfigured()) {
+        logger.info(`Using ScraperAPI for B&H Photo ${assetId}`);
+        const response = await fetchViaScraperApi(url, {
+          renderJs: false,
+          country: 'us',
+        });
 
-      const response = await this.client.get(url, {
-        headers: {
-          ...getBrowserHeaders('https://www.bhphotovideo.com/'),
-        },
-      });
+        if (response.status !== 200) {
+          throw new AdapterError(this.name, 'SCRAPER_API_ERROR', `ScraperAPI returned ${response.status}`);
+        }
 
-      if (response.status !== 200) {
-        throw new AdapterError(this.name, 'HTTP_ERROR', `B&H returned ${response.status}`);
+        htmlData = response.data;
+      } else {
+        // Direct scraping fallback
+        // B&H is generally more permissive but still warm up
+        await this.client.get('https://www.bhphotovideo.com/', {
+          headers: getBrowserHeaders(),
+        });
+
+        await sleep(getRandomDelay(800, 1500));
+
+        const response = await this.client.get(url, {
+          headers: {
+            ...getBrowserHeaders('https://www.bhphotovideo.com/'),
+          },
+        });
+
+        if (response.status !== 200) {
+          throw new AdapterError(this.name, 'HTTP_ERROR', `B&H returned ${response.status}`);
+        }
+
+        htmlData = response.data;
       }
 
-      const $ = cheerio.load(response.data);
+      const $ = cheerio.load(htmlData);
 
       // B&H product listing selectors
       $('[data-selenium="miniProductPage"]').each((_, element) => {
