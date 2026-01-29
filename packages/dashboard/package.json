@@ -17,6 +17,7 @@
     "recharts": "^2.10.0"
   },
   "devDependencies": {
+    "@types/node": "^20.19.30",
     "@types/react": "^18.2.43",
     "@types/react-dom": "^18.2.17",
     "@vercel/node": "^3.0.0",
