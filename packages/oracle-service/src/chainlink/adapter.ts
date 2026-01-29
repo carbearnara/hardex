@@ -94,22 +94,33 @@ export function createChainlinkAdapter(options: AdapterOptions): express.Applica
       const testUrl = 'https://www.newegg.com/p/pl?d=rtx+4090&N=100007709';
       const result = await fetchViaScraperApi(testUrl, { country: 'us' });
 
-      // Check what we got
-      const htmlSample = typeof result.data === 'string'
-        ? result.data.substring(0, 1000)
-        : JSON.stringify(result.data).substring(0, 1000);
+      const html = typeof result.data === 'string' ? result.data : '';
 
-      const hasProducts = typeof result.data === 'string' && (
-        result.data.includes('item-cell') ||
-        result.data.includes('item-container') ||
-        result.data.includes('product-price')
-      );
+      // Check for various product selectors
+      const selectors = {
+        'item-cell': html.includes('item-cell'),
+        'item-container': html.includes('item-container'),
+        'goods-container': html.includes('goods-container'),
+        'product-price': html.includes('product-price'),
+        'price-current': html.includes('price-current'),
+        'item-title': html.includes('item-title'),
+        'item-info': html.includes('item-info'),
+      };
+
+      // Try to find price patterns
+      const priceMatches = html.match(/\$[\d,]+\.?\d*/g)?.slice(0, 10) || [];
+
+      // Find any JSON-LD data
+      const jsonLdMatch = html.match(/<script type="application\/ld\+json">([\s\S]*?)<\/script>/);
+      const hasJsonLd = !!jsonLdMatch;
 
       res.json({
         status: result.status,
-        dataLength: typeof result.data === 'string' ? result.data.length : 0,
-        hasProducts,
-        htmlSample,
+        dataLength: html.length,
+        selectors,
+        priceMatches,
+        hasJsonLd,
+        htmlSample: html.substring(0, 500),
       });
     } catch (error) {
       res.json({ error: String(error) });
