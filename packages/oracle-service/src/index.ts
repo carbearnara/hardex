@@ -2,12 +2,21 @@ import { loadConfig } from './config/index.js';
 import { createAdapters, createMockAdapters, createScraperAdapters } from './adapters/index.js';
 import { PriceAggregator } from './aggregator/index.js';
 import { createChainlinkAdapter, startAdapter } from './chainlink/index.js';
+import { initSupabase } from './storage/supabase.js';
 import { createLogger } from './utils/logger.js';
 
 const logger = createLogger('main');
 
 async function main() {
   logger.info('Starting Hardware Price Oracle Service');
+
+  // Initialize Supabase for rental price history storage
+  const supabase = initSupabase();
+  if (supabase) {
+    logger.info('Supabase initialized for rental price history');
+  } else {
+    logger.info('Supabase not configured - rental history will not be persisted');
+  }
 
   // Check for mode
   const demoMode = process.env.DEMO_MODE === 'true' || process.env.DEMO_MODE === '1';

@@ -14,6 +14,7 @@
     "lint": "eslint src/"
   },
   "dependencies": {
+    "@supabase/supabase-js": "^2.93.3",
     "axios": "^1.6.0",
     "cheerio": "^1.0.0-rc.12",
     "dotenv": "^16.3.1",
