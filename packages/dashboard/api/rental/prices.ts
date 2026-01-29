@@ -1,5 +1,4 @@
 import type { VercelRequest, VercelResponse } from '@vercel/node';
-import { createClient } from '@supabase/supabase-js';
 
 // GPU rental types
 type RentalGpuType =
@@ -183,6 +182,8 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   // Try to get the latest prices from Supabase first
   if (supabaseUrl && supabaseKey) {
     try {
+      // Dynamic import to avoid build-time dependency issues
+      const { createClient } = await import('@supabase/supabase-js');
       const supabase = createClient(supabaseUrl, supabaseKey);
 
       // Get the most recent prices (within last 5 minutes)

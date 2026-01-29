@@ -1,5 +1,4 @@
 import type { VercelRequest, VercelResponse } from '@vercel/node';
-import { createClient } from '@supabase/supabase-js';
 
 /**
  * GET /api/rental/history
@@ -22,12 +21,16 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     return res.status(503).json({
       error: 'Supabase not configured',
       message: 'Set SUPABASE_URL and SUPABASE_ANON_KEY environment variables.',
+      history: [],
+      count: 0,
     });
   }
 
-  const supabase = createClient(supabaseUrl, supabaseKey);
-
   try {
+    // Dynamic import to avoid build-time dependency issues
+    const { createClient } = await import('@supabase/supabase-js');
+    const supabase = createClient(supabaseUrl, supabaseKey);
+
     const { gpuType, startTime, endTime, limit } = req.query;
 
     let query = supabase
@@ -57,7 +60,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     }
 
     // Transform to match frontend format
-    const history = (data || []).map((record) => ({
+    const history = (data || []).map((record: Record<string, unknown>) => ({
       gpuType: record.gpu_type,
       timestamp: record.timestamp,
       avgPrice: record.avg_price,
