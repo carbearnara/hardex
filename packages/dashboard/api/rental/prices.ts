@@ -141,13 +141,13 @@ function generatePriceStats(gpuType: RentalGpuType): RentalPriceStats {
   };
 }
 
-export default function handler(_req: VercelRequest, res: VercelResponse) {
-  // Set CORS headers
-  res.setHeader('Access-Control-Allow-Origin', '*');
-  res.setHeader('Access-Control-Allow-Methods', 'GET');
-  res.setHeader('Cache-Control', 's-maxage=60, stale-while-revalidate=30');
-
-  // Generate prices for all GPUs
+function generateSimulatedPrices(): {
+  prices: Record<RentalGpuType, RentalPriceStats>;
+  timestamp: number;
+  cached: boolean;
+  source: string;
+  note: string;
+} {
   const gpuTypes = Object.keys(GPU_PRICING) as RentalGpuType[];
   const prices: Record<RentalGpuType, RentalPriceStats> = {} as Record<
     RentalGpuType,
@@ -158,11 +158,92 @@ export default function handler(_req: VercelRequest, res: VercelResponse) {
     prices[gpuType] = generatePriceStats(gpuType);
   }
 
-  res.status(200).json({
+  return {
     prices,
     timestamp: Date.now(),
     cached: false,
     source: 'simulated',
     note: 'Prices based on Vast.ai market data patterns',
-  });
+  };
+}
+
+export default async function handler(req: VercelRequest, res: VercelResponse) {
+  // Set CORS headers
+  res.setHeader('Access-Control-Allow-Origin', '*');
+  res.setHeader('Access-Control-Allow-Methods', 'GET');
+
+  if (req.method === 'OPTIONS') {
+    return res.status(200).end();
+  }
+
+  const supabaseUrl = process.env.SUPABASE_URL;
+  const supabaseKey = process.env.SUPABASE_ANON_KEY;
+
+  // Try to get the latest prices from Supabase first
+  if (supabaseUrl && supabaseKey) {
+    try {
+      // Dynamic import to avoid build-time dependency issues
+      const { createClient } = await import('@supabase/supabase-js');
+      const supabase = createClient(supabaseUrl, supabaseKey);
+
+      // Get the most recent prices (within last 5 minutes)
+      const fiveMinutesAgo = Date.now() - 5 * 60 * 1000;
+
+      const { data, error } = await supabase
+        .from('rental_prices')
+        .select('*')
+        .gte('timestamp', fiveMinutesAgo)
+        .order('timestamp', { ascending: false });
+
+      if (!error && data && data.length > 0) {
+        // Group by GPU type and take the most recent for each
+        const latestByGpu: Record<RentalGpuType, RentalPriceStats> = {} as Record<
+          RentalGpuType,
+          RentalPriceStats
+        >;
+        let latestTimestamp = 0;
+
+        for (const record of data) {
+          const gpuType = record.gpu_type as RentalGpuType;
+          if (!latestByGpu[gpuType]) {
+            latestByGpu[gpuType] = {
+              gpuType,
+              minPrice: record.min_price,
+              maxPrice: record.max_price,
+              medianPrice: (record.avg_price + record.min_price) / 2,
+              avgPrice: record.avg_price,
+              offerCount: record.offer_count,
+              interruptibleAvg: record.interruptible_avg || record.avg_price * 0.6,
+              onDemandAvg: record.on_demand_avg || record.avg_price * 1.1,
+              timestamp: record.timestamp,
+            };
+            if (record.timestamp > latestTimestamp) {
+              latestTimestamp = record.timestamp;
+            }
+          }
+        }
+
+        // Check if we have data for all GPU types
+        const gpuTypes = Object.keys(GPU_PRICING) as RentalGpuType[];
+        const hasAllGpus = gpuTypes.every((gpu) => latestByGpu[gpu]);
+
+        if (hasAllGpus) {
+          res.setHeader('Cache-Control', 's-maxage=60, stale-while-revalidate=30');
+          return res.status(200).json({
+            prices: latestByGpu,
+            timestamp: latestTimestamp,
+            cached: false,
+            source: 'supabase',
+          });
+        }
+      }
+    } catch (error) {
+      console.error('Error fetching from Supabase:', error);
+      // Fall through to simulated data
+    }
+  }
+
+  // Fall back to simulated data
+  res.setHeader('Cache-Control', 's-maxage=60, stale-while-revalidate=30');
+  res.status(200).json(generateSimulatedPrices());
 }
