@@ -10,6 +10,7 @@ import {
 } from './response.js';
 import { rentalRouter } from '../api/rental.js';
 import { createLogger } from '../utils/logger.js';
+import { fetchViaScraperApi, isScraperApiConfigured } from '../adapters/scraper-utils.js';
 
 const logger = createLogger('chainlink-adapter');
 
@@ -80,6 +81,38 @@ export function createChainlinkAdapter(options: AdapterOptions): express.Applica
     } catch (error) {
       logger.error(`Refresh failed: ${error}`);
       res.status(500).json({ error: 'Refresh failed' });
+    }
+  });
+
+  // Debug endpoint to test ScraperAPI
+  app.get('/debug/scraper', async (_req: Request, res: Response) => {
+    if (!isScraperApiConfigured()) {
+      return res.json({ error: 'ScraperAPI not configured' });
+    }
+
+    try {
+      const testUrl = 'https://www.newegg.com/p/pl?d=rtx+4090&N=100007709';
+      const result = await fetchViaScraperApi(testUrl, { country: 'us' });
+
+      // Check what we got
+      const htmlSample = typeof result.data === 'string'
+        ? result.data.substring(0, 1000)
+        : JSON.stringify(result.data).substring(0, 1000);
+
+      const hasProducts = typeof result.data === 'string' && (
+        result.data.includes('item-cell') ||
+        result.data.includes('item-container') ||
+        result.data.includes('product-price')
+      );
+
+      res.json({
+        status: result.status,
+        dataLength: typeof result.data === 'string' ? result.data.length : 0,
+        hasProducts,
+        htmlSample,
+      });
+    } catch (error) {
+      res.json({ error: String(error) });
     }
   });
 
