@@ -1,0 +1,22 @@
+{
+  "name": "hardex",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Hardware price oracle for AI datacenter assets",
+  "scripts": {
+    "build": "pnpm -r build",
+    "test": "pnpm -r test",
+    "dev": "pnpm --filter oracle-service dev",
+    "dev:dashboard": "pnpm --filter dashboard dev",
+    "dev:all": "pnpm --filter oracle-service dev & pnpm --filter dashboard dev",
+    "lint": "pnpm -r lint"
+  },
+  "keywords": [
+    "oracle",
+    "chainlink",
+    "hardware",
+    "price-feed",
+    "defi"
+  ],
+  "license": "MIT"
+}
