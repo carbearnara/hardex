@@ -63,6 +63,12 @@ describe('Chainlink response', () => {
         sourceCount: 3,
         timestamp: 1704067200000,
         updatedAt: 1704067200000,
+        currency: 'USD',
+        sources: [
+          { name: 'newegg', price: 1599.99, count: 5, isSimulated: false },
+          { name: 'amazon', price: 1609.99, count: 3, isSimulated: false },
+          { name: 'bestbuy', price: 1589.99, count: 2, isSimulated: false },
+        ],
       };
 
       const response = buildSuccessResponse('1', price);
