@@ -24,11 +24,12 @@ export function initSupabase(): SupabaseClient | null {
 
   if (!url || !key) {
     logger.warn('Supabase not configured - SUPABASE_URL and SUPABASE_ANON_KEY required');
+    logger.warn(`SUPABASE_URL: ${url ? 'set' : 'missing'}, SUPABASE_ANON_KEY: ${key ? 'set' : 'missing'}`);
     return null;
   }
 
   supabase = createClient(url, key);
-  logger.info('Supabase client initialized');
+  logger.info(`Supabase client initialized for ${url}`);
   return supabase;
 }
 
@@ -91,6 +92,7 @@ export async function getRentalHistory(
       return [];
     }
 
+    logger.debug(`Fetched ${data?.length || 0} rental history records`);
     return data || [];
   } catch (err) {
     logger.error('Error fetching rental history:', err);

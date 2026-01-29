@@ -207,4 +207,44 @@ router.get('/history/stats', async (_req: Request, res: Response) => {
   }
 });
 
+/**
+ * GET /rental/debug
+ * Debug endpoint for Supabase connection
+ */
+router.get('/debug', async (_req: Request, res: Response) => {
+  const supabase = getSupabase();
+
+  if (!supabase) {
+    return res.json({
+      configured: false,
+      url: process.env.SUPABASE_URL ? 'set' : 'missing',
+      key: process.env.SUPABASE_ANON_KEY ? 'set' : 'missing',
+    });
+  }
+
+  try {
+    // Direct query test
+    const { data, error, count } = await supabase
+      .from('rental_prices')
+      .select('*', { count: 'exact' });
+
+    res.json({
+      configured: true,
+      url: process.env.SUPABASE_URL,
+      queryResult: {
+        success: !error,
+        error: error?.message,
+        rowCount: data?.length || 0,
+        totalCount: count,
+        sample: data?.slice(0, 2),
+      },
+    });
+  } catch (err) {
+    res.json({
+      configured: true,
+      error: String(err),
+    });
+  }
+});
+
 export { router as rentalRouter };
