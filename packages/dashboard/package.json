@@ -10,14 +10,12 @@
     "lint": "eslint src/"
   },
   "dependencies": {
-    "@supabase/supabase-js": "^2.93.3",
-    "lucide-react": "^0.294.0",
     "react": "^18.2.0",
     "react-dom": "^18.2.0",
-    "recharts": "^2.10.0"
+    "recharts": "^2.10.0",
+    "lucide-react": "^0.294.0"
   },
   "devDependencies": {
-    "@types/node": "^20.19.30",
     "@types/react": "^18.2.43",
     "@types/react-dom": "^18.2.17",
     "@vercel/node": "^3.0.0",

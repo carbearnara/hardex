@@ -11,7 +11,7 @@ type TimeRange = '1h' | '6h' | '24h' | '7d' | 'all';
 const NEEDS_STORAGE_LOOKUP: TimeRange[] = ['24h', '7d', 'all'];
 
 export function RentalTab() {
-  const { prices, history, storageStats, isLoading, error, lastUpdate, dataSource } = useRentalPrices();
+  const { prices, history, storageStats, isLoading, error, lastUpdate } = useRentalPrices();
   const [selectedGpus, setSelectedGpus] = useState<RentalGpuType[]>(['RTX_4090', 'H100_80GB', 'A100_80GB']);
   const [timeRange, setTimeRange] = useState<TimeRange>('1h');
   const [fullHistory, setFullHistory] = useState<Record<RentalGpuType, RentalPriceHistory[]> | null>(null);
@@ -101,29 +101,10 @@ export function RentalTab() {
         <div>
           <h2 className="text-xl font-semibold text-white">GPU Rental Pricing</h2>
           <p className="text-sm text-slate-400 mt-1">
-            {dataSource === 'oracle'
-              ? 'Live cloud GPU rental rates from Vast.ai marketplace'
-              : 'Simulated GPU rental rates based on market patterns'}
+            Real-time cloud GPU rental rates from Vast.ai marketplace
           </p>
         </div>
         <div className="flex items-center gap-4">
-          {/* Data Source Indicator */}
-          {dataSource !== 'loading' && (
-            <div
-              className={`text-xs px-2 py-1 rounded-full flex items-center gap-1.5 ${
-                dataSource === 'oracle'
-                  ? 'bg-green-500/10 text-green-400 border border-green-500/30'
-                  : 'bg-amber-500/10 text-amber-400 border border-amber-500/30'
-              }`}
-            >
-              <div
-                className={`w-1.5 h-1.5 rounded-full ${
-                  dataSource === 'oracle' ? 'bg-green-400' : 'bg-amber-400'
-                }`}
-              ></div>
-              {dataSource === 'oracle' ? 'Live Data' : 'Simulated'}
-            </div>
-          )}
           {storageStats && storageStats.totalRecords > 0 && (
             <div className="text-xs text-slate-500 bg-slate-800/50 px-3 py-1.5 rounded-lg">
               <span className="text-slate-400">{storageStats.totalRecords.toLocaleString()}</span> records stored

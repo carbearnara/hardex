@@ -8,7 +8,7 @@ import {
   getStorageStats,
 } from '../utils/rentalStorage';
 
-const API_BASE = import.meta.env.VITE_ORACLE_API_URL || '/api';
+const API_BASE = '/api';
 const POLL_INTERVAL = 60000; // 1 minute for rental prices
 const MAX_MEMORY_HISTORY = 120; // Keep last 2 hours in memory for charts
 const MAINTENANCE_INTERVAL = 10 * 60 * 1000; // Run maintenance every 10 minutes
@@ -35,106 +35,30 @@ interface UseRentalPricesResult {
   isLoading: boolean;
   error: string | null;
   lastUpdate: number | null;
-  dataSource: 'oracle' | 'simulated' | 'loading';
   refetch: () => Promise<void>;
   loadFullHistory: (gpuType: RentalGpuType) => Promise<RentalPriceHistory[]>;
 }
 
-// GPU types for iteration
-const GPU_TYPES: RentalGpuType[] = [
-  'RTX_4090',
-  'RTX_3090',
-  'A100_40GB',
-  'A100_80GB',
-  'H100_80GB',
-  'H100_PCIE',
-  'A6000',
-  'L40S',
-];
-
 export function useRentalPrices(): UseRentalPricesResult {
   const [prices, setPrices] = useState<Record<RentalGpuType, RentalPriceStats> | null>(null);
-  const [history, setHistory] = useState<Record<RentalGpuType, RentalPriceHistory[]>>(
-    {} as Record<RentalGpuType, RentalPriceHistory[]>
-  );
+  const [history, setHistory] = useState<Record<RentalGpuType, RentalPriceHistory[]>>({} as Record<RentalGpuType, RentalPriceHistory[]>);
   const [storageStats, setStorageStats] = useState<StorageStats | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [lastUpdate, setLastUpdate] = useState<number | null>(null);
-  const [dataSource, setDataSource] = useState<'oracle' | 'simulated' | 'loading'>('loading');
 
   const lastMaintenanceRef = useRef<number>(0);
   const initializedRef = useRef<boolean>(false);
-  const historyLoadedRef = useRef<boolean>(false);
 
-  // Fetch historical data from Supabase via the oracle service
-  const fetchHistoricalData = useCallback(async () => {
-    try {
-      // Calculate time range: fetch last 7 days of data
-      const endTime = Date.now();
-      const startTime = endTime - 7 * 24 * 60 * 60 * 1000;
-
-      const response = await fetch(
-        `${API_BASE}/rental/history?startTime=${startTime}&endTime=${endTime}&limit=5000`
-      );
-
-      if (!response.ok) {
-        // History endpoint might not be available (no Supabase configured)
-        console.warn('Historical data not available:', response.status);
-        return null;
-      }
-
-      const data = await response.json();
-
-      if (!data.history || data.history.length === 0) {
-        return null;
-      }
-
-      // Group history by GPU type
-      const groupedHistory: Record<RentalGpuType, RentalPriceHistory[]> = {} as Record<
-        RentalGpuType,
-        RentalPriceHistory[]
-      >;
-
-      for (const record of data.history) {
-        const gpuType = record.gpuType as RentalGpuType;
-        if (!groupedHistory[gpuType]) {
-          groupedHistory[gpuType] = [];
-        }
-        groupedHistory[gpuType].push({
-          timestamp: record.timestamp,
-          avgPrice: record.avgPrice,
-          minPrice: record.minPrice,
-          maxPrice: record.maxPrice,
-          offerCount: record.offerCount,
-        });
-      }
-
-      // Sort by timestamp
-      for (const gpuType of Object.keys(groupedHistory) as RentalGpuType[]) {
-        groupedHistory[gpuType].sort((a, b) => a.timestamp - b.timestamp);
-      }
-
-      return groupedHistory;
-    } catch (err) {
-      console.warn('Failed to fetch historical data:', err);
-      return null;
-    }
-  }, []);
-
-  // Load history from IndexedDB and Supabase on mount
+  // Load history from IndexedDB on mount
   useEffect(() => {
     if (initializedRef.current) return;
     initializedRef.current = true;
 
-    const loadData = async () => {
-      // First, try to load from IndexedDB (fast, local cache)
-      const storedHistory = await getAllPriceHistory();
+    getAllPriceHistory().then((storedHistory) => {
       if (Object.keys(storedHistory).length > 0) {
-        const recentHistory: Record<RentalGpuType, RentalPriceHistory[]> = {} as Record<
-          RentalGpuType,
-          RentalPriceHistory[]
-        >;
+        // Only keep recent history in memory for performance
+        const recentHistory: Record<RentalGpuType, RentalPriceHistory[]> = {} as Record<RentalGpuType, RentalPriceHistory[]>;
 
         for (const [gpuType, gpuHistory] of Object.entries(storedHistory)) {
           recentHistory[gpuType as RentalGpuType] = gpuHistory.slice(-MAX_MEMORY_HISTORY);
@@ -142,78 +66,11 @@ export function useRentalPrices(): UseRentalPricesResult {
 
         setHistory(recentHistory);
       }
+    });
 
-      // Load storage stats
-      const stats = await getStorageStats();
-      setStorageStats(stats);
-
-      // Then, fetch historical data from Supabase (authoritative source)
-      if (!historyLoadedRef.current) {
-        historyLoadedRef.current = true;
-
-        const supabaseHistory = await fetchHistoricalData();
-
-        if (supabaseHistory && Object.keys(supabaseHistory).length > 0) {
-          // Store Supabase data in IndexedDB for caching
-          const recordsToStore: Array<{ gpuType: RentalGpuType; data: RentalPriceHistory }> = [];
-
-          for (const [gpuType, gpuHistory] of Object.entries(supabaseHistory) as [
-            RentalGpuType,
-            RentalPriceHistory[],
-          ][]) {
-            for (const record of gpuHistory) {
-              recordsToStore.push({ gpuType, data: record });
-            }
-          }
-
-          // Store to IndexedDB (don't await, do in background)
-          if (recordsToStore.length > 0) {
-            storePriceRecords(recordsToStore).catch(console.error);
-          }
-
-          // Merge with existing history, keeping most recent in memory
-          setHistory((prev) => {
-            const merged: Record<RentalGpuType, RentalPriceHistory[]> = {} as Record<
-              RentalGpuType,
-              RentalPriceHistory[]
-            >;
-
-            // Combine all GPU types
-            const allGpuTypes = new Set([
-              ...Object.keys(prev),
-              ...Object.keys(supabaseHistory),
-            ]) as Set<RentalGpuType>;
-
-            for (const gpuType of allGpuTypes) {
-              const prevHistory = prev[gpuType] || [];
-              const newHistory = supabaseHistory[gpuType] || [];
-
-              // Merge and deduplicate by timestamp
-              const combined = [...newHistory, ...prevHistory];
-              const seen = new Set<number>();
-              const deduped = combined.filter((item) => {
-                if (seen.has(item.timestamp)) return false;
-                seen.add(item.timestamp);
-                return true;
-              });
-
-              // Sort by timestamp and keep only recent
-              deduped.sort((a, b) => a.timestamp - b.timestamp);
-              merged[gpuType] = deduped.slice(-MAX_MEMORY_HISTORY);
-            }
-
-            return merged;
-          });
-
-          // Update storage stats
-          const newStats = await getStorageStats();
-          setStorageStats(newStats);
-        }
-      }
-    };
-
-    loadData();
-  }, [fetchHistoricalData]);
+    // Load storage stats
+    getStorageStats().then(setStorageStats);
+  }, []);
 
   // Run maintenance (aggregation and cleanup) periodically
   const runMaintenance = useCallback(async () => {
@@ -223,7 +80,9 @@ export function useRentalPrices(): UseRentalPricesResult {
     }
     lastMaintenanceRef.current = now;
 
-    for (const gpuType of GPU_TYPES) {
+    const gpuTypes: RentalGpuType[] = ['RTX_4090', 'RTX_3090', 'A100_40GB', 'A100_80GB', 'H100_80GB', 'H100_PCIE', 'A6000', 'L40S'];
+
+    for (const gpuType of gpuTypes) {
       await aggregateOldData(gpuType);
       await cleanupOldData(gpuType);
     }
@@ -247,13 +106,6 @@ export function useRentalPrices(): UseRentalPricesResult {
       setLastUpdate(data.timestamp);
       setError(null);
 
-      // Track data source
-      if (data.source === 'oracle') {
-        setDataSource('oracle');
-      } else {
-        setDataSource('simulated');
-      }
-
       // Prepare records for storage
       const recordsToStore: Array<{ gpuType: RentalGpuType; data: RentalPriceHistory }> = [];
 
@@ -261,10 +113,7 @@ export function useRentalPrices(): UseRentalPricesResult {
       setHistory((prev) => {
         const newHistory = { ...prev };
 
-        for (const [gpuType, stats] of Object.entries(data.prices) as [
-          RentalGpuType,
-          RentalPriceStats,
-        ][]) {
+        for (const [gpuType, stats] of Object.entries(data.prices) as [RentalGpuType, RentalPriceStats][]) {
           const gpuHistory = newHistory[gpuType] || [];
           const newPoint: RentalPriceHistory = {
             timestamp: data.timestamp,
@@ -317,7 +166,6 @@ export function useRentalPrices(): UseRentalPricesResult {
     isLoading,
     error,
     lastUpdate,
-    dataSource,
     refetch: fetchPrices,
     loadFullHistory,
   };
