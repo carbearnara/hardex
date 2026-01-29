@@ -1,0 +1,9 @@
+[build]
+builder = "dockerfile"
+dockerfilePath = "packages/oracle-service/Dockerfile"
+watchPatterns = ["packages/oracle-service/**"]
+
+[deploy]
+healthcheckPath = "/health"
+restartPolicyType = "on_failure"
+restartPolicyMaxRetries = 10
