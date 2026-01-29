@@ -59,7 +59,28 @@ export function createChainlinkAdapter(options: AdapterOptions): express.Applica
       status: 'ok',
       timestamp: Date.now(),
       assets: ASSET_IDS,
+      scraperApi: !!process.env.SCRAPER_API_KEY,
     });
+  });
+
+  // Force refresh prices (triggers immediate scrape)
+  app.post('/refresh', async (_req: Request, res: Response) => {
+    try {
+      logger.info('Manual price refresh triggered');
+      const updates = await aggregator.updateAllPrices();
+      res.json({
+        success: true,
+        updated: updates.length,
+        assets: updates.map(u => ({
+          assetId: u.assetId,
+          price: u.price.price,
+          sources: u.price.sources,
+        })),
+      });
+    } catch (error) {
+      logger.error(`Refresh failed: ${error}`);
+      res.status(500).json({ error: 'Refresh failed' });
+    }
   });
 
   // GPU Rental pricing routes
