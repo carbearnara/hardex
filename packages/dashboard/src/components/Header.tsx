@@ -23,8 +23,8 @@ export function Header({ isConnected, lastUpdate, onRefresh, cacheCount, activeT
               <Cpu className="w-6 h-6 text-primary-500" />
             </div>
             <div>
-              <h1 className="text-xl font-bold text-white">Hardex</h1>
-              <p className="text-xs text-slate-400">Hardware Price Oracle</p>
+              <h1 className="text-xl font-bold text-white">AIRentSeeker</h1>
+              <p className="text-xs text-slate-400">GPU Price Tracker</p>
             </div>
           </div>
 

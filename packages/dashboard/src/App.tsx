@@ -152,9 +152,9 @@ function App() {
         <footer className="mt-12 pt-8 border-t border-slate-800">
           <div className="flex flex-col sm:flex-row items-center justify-between gap-4 text-sm text-slate-500">
             <div className="flex items-center gap-2">
-              <span>Hardex Oracle</span>
+              <span>AIRentSeeker</span>
               <span className="text-slate-700">|</span>
-              <span>Chainlink Compatible</span>
+              <span>GPU Rental & Hardware Prices</span>
             </div>
             <div className="flex items-center gap-4">
               <span>Prices in USD</span>
