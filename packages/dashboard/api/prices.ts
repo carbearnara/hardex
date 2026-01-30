@@ -1,15 +1,8 @@
 import type { VercelRequest, VercelResponse } from '@vercel/node';
 
-/**
- * Hardware Prices API
- *
- * In production, this endpoint returns an error indicating that
- * real price data requires the oracle service backend.
- *
- * Simulated data has been removed - only real scraped data is shown.
- */
+const ORACLE_SERVICE_URL = process.env.ORACLE_SERVICE_URL || 'https://hardex-production.up.railway.app';
 
-export default function handler(req: VercelRequest, res: VercelResponse) {
+export default async function handler(req: VercelRequest, res: VercelResponse) {
   // CORS headers
   res.setHeader('Access-Control-Allow-Origin', '*');
   res.setHeader('Access-Control-Allow-Methods', 'GET, OPTIONS');
@@ -19,11 +12,32 @@ export default function handler(req: VercelRequest, res: VercelResponse) {
     return res.status(200).end();
   }
 
-  // Return error indicating real data requires backend
-  return res.status(503).json({
-    error: 'Real-time price data unavailable',
-    message: 'Hardware price tracking requires the oracle service backend with live scrapers. Deploy the oracle-service or run locally with `pnpm dev` to see real prices.',
-    prices: null,
-    timestamp: Date.now(),
-  });
+  try {
+    // Fetch from the Railway oracle service
+    const response = await fetch(`${ORACLE_SERVICE_URL}/prices`, {
+      headers: {
+        'Accept': 'application/json',
+      },
+    });
+
+    if (!response.ok) {
+      throw new Error(`Oracle service returned ${response.status}`);
+    }
+
+    const data = await response.json();
+
+    return res.status(200).json({
+      ...data,
+      source: 'oracle-service',
+    });
+  } catch (error) {
+    console.error('Failed to fetch from oracle service:', error);
+
+    return res.status(503).json({
+      error: 'Oracle service unavailable',
+      message: error instanceof Error ? error.message : 'Unknown error',
+      prices: null,
+      timestamp: Date.now(),
+    });
+  }
 }

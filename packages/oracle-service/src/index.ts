@@ -2,7 +2,8 @@ import { loadConfig } from './config/index.js';
 import { createAdapters, createMockAdapters, createScraperAdapters } from './adapters/index.js';
 import { PriceAggregator } from './aggregator/index.js';
 import { createChainlinkAdapter, startAdapter } from './chainlink/index.js';
-import { initSupabase } from './storage/supabase.js';
+import { initSupabase, storeRentalPrices } from './storage/supabase.js';
+import { vastaiAdapter } from './adapters/rental-vastai.js';
 import { createLogger } from './utils/logger.js';
 
 const logger = createLogger('main');
@@ -63,7 +64,7 @@ async function main() {
   logger.info('Performing initial price fetch...');
   await aggregator.updateAllPrices();
 
-  // Set up periodic price updates
+  // Set up periodic price updates for hardware
   const updateInterval = setInterval(async () => {
     try {
       const updates = await aggregator.updateAllPrices();
@@ -76,10 +77,52 @@ async function main() {
     }
   }, config.updateIntervalMs);
 
+  // Set up periodic rental price updates (every 5 minutes)
+  const RENTAL_UPDATE_INTERVAL_MS = 5 * 60 * 1000;
+
+  const updateRentalPrices = async () => {
+    try {
+      logger.info('Fetching rental prices...');
+      const prices = await vastaiAdapter.getAllPriceStats();
+      const timestamp = Date.now();
+
+      // Store in Supabase
+      const records = Object.entries(prices).map(([gpuType, stats]) => ({
+        gpu_type: gpuType,
+        timestamp,
+        avg_price: stats.avgPrice,
+        min_price: stats.minPrice,
+        max_price: stats.maxPrice,
+        offer_count: stats.offerCount,
+        interruptible_avg: stats.interruptibleAvg,
+        on_demand_avg: stats.onDemandAvg,
+      }));
+
+      await storeRentalPrices(records);
+      logger.info(`Stored ${records.length} rental price records to Supabase`);
+    } catch (error) {
+      logger.error(`Error updating rental prices: ${error}`);
+    }
+  };
+
+  // Initial rental price fetch
+  if (supabase) {
+    logger.info('Performing initial rental price fetch...');
+    await updateRentalPrices();
+  }
+
+  // Set up rental price update interval
+  const rentalUpdateInterval = supabase
+    ? setInterval(updateRentalPrices, RENTAL_UPDATE_INTERVAL_MS)
+    : null;
+
   // Graceful shutdown
   const shutdown = () => {
     logger.info('Shutting down...');
     clearInterval(updateInterval);
+    if (rentalUpdateInterval) {
+      clearInterval(rentalUpdateInterval);
+    }
     process.exit(0);
   };
 

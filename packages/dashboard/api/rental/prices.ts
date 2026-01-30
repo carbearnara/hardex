@@ -1,5 +1,7 @@
 import type { VercelRequest, VercelResponse } from '@vercel/node';
 
+const ORACLE_SERVICE_URL = process.env.ORACLE_SERVICE_URL || 'https://hardex-production.up.railway.app';
+
 // GPU rental types
 type RentalGpuType =
   | 'RTX_4090'
@@ -176,13 +178,30 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     return res.status(200).end();
   }
 
+  // Try to fetch from Railway oracle service first
+  try {
+    const response = await fetch(`${ORACLE_SERVICE_URL}/rental/prices`, {
+      headers: { 'Accept': 'application/json' },
+    });
+
+    if (response.ok) {
+      const data = await response.json();
+      res.setHeader('Cache-Control', 's-maxage=60, stale-while-revalidate=30');
+      return res.status(200).json({
+        ...data,
+        source: 'oracle-service',
+      });
+    }
+  } catch (error) {
+    console.error('Error fetching from oracle service:', error);
+  }
+
+  // Fallback: Try Supabase
   const supabaseUrl = process.env.SUPABASE_URL;
   const supabaseKey = process.env.SUPABASE_ANON_KEY;
 
-  // Try to get the latest prices from Supabase first
   if (supabaseUrl && supabaseKey) {
     try {
-      // Dynamic import to avoid build-time dependency issues
       const { createClient } = await import('@supabase/supabase-js');
       const supabase = createClient(supabaseUrl, supabaseKey);
 
@@ -196,7 +215,6 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         .order('timestamp', { ascending: false });
 
       if (!error && data && data.length > 0) {
-        // Group by GPU type and take the most recent for each
         const latestByGpu: Record<RentalGpuType, RentalPriceStats> = {} as Record<
           RentalGpuType,
           RentalPriceStats
@@ -223,7 +241,6 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
           }
         }
 
-        // Check if we have data for all GPU types
         const gpuTypes = Object.keys(GPU_PRICING) as RentalGpuType[];
         const hasAllGpus = gpuTypes.every((gpu) => latestByGpu[gpu]);
 
@@ -239,11 +256,10 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       }
     } catch (error) {
       console.error('Error fetching from Supabase:', error);
-      // Fall through to simulated data
     }
   }
 
-  // Fall back to simulated data
+  // Final fallback: simulated data
   res.setHeader('Cache-Control', 's-maxage=60, stale-while-revalidate=30');
   res.status(200).json(generateSimulatedPrices());
 }
