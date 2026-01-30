@@ -33,10 +33,11 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
 
     const { gpuType, startTime, endTime, limit } = req.query;
 
+    // Order descending to get newest records first, then reverse for chronological order
     let query = supabase
       .from('rental_prices')
       .select('*')
-      .order('timestamp', { ascending: true })
+      .order('timestamp', { ascending: false })
       .limit(limit ? parseInt(limit as string, 10) : 1000);
 
     if (gpuType) {
@@ -59,7 +60,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       });
     }
 
-    // Transform to match frontend format
+    // Transform to match frontend format and reverse for chronological order
     const history = (data || []).map((record: Record<string, unknown>) => ({
       gpuType: record.gpu_type,
       timestamp: record.timestamp,
@@ -69,7 +70,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       offerCount: record.offer_count,
       interruptibleAvg: record.interruptible_avg,
       onDemandAvg: record.on_demand_avg,
-    }));
+    })).reverse(); // Reverse to get chronological order (oldest first)
 
     // Cache for 1 minute
     res.setHeader('Cache-Control', 's-maxage=60, stale-while-revalidate=30');

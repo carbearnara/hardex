@@ -241,7 +241,7 @@ export function useRentalPrices(): UseRentalPricesResult {
       setError(null);
 
       // Track data source
-      if (data.source === 'supabase') {
+      if (data.source === 'supabase' || data.source === 'oracle-service') {
         setDataSource('supabase');
       } else {
         setDataSource('simulated');

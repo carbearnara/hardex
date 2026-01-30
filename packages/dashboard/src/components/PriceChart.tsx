@@ -53,7 +53,12 @@ export function PriceChart({ history, selectedAsset }: PriceChartProps) {
         <h3 className="text-lg font-semibold text-white">
           {asset?.name || assetId} Price History
         </h3>
-        <p className="text-sm text-slate-400">Last 5 minutes</p>
+        <p className="text-sm text-slate-400">
+          {data.length > 1
+            ? `${new Date(data[0].timestamp).toLocaleDateString()} - ${new Date(data[data.length - 1].timestamp).toLocaleDateString()}`
+            : 'Collecting data...'}
+          {data.length > 0 && ` (${data.length} points)`}
+        </p>
       </div>
 
       <div className="h-64">

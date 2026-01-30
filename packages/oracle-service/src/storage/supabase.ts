@@ -79,10 +79,11 @@ export async function getRentalHistory(
   }
 
   try {
+    // Order descending to get newest records first
     let query = supabase
       .from('rental_prices')
       .select('*')
-      .order('timestamp', { ascending: true })
+      .order('timestamp', { ascending: false })
       .limit(limit);
 
     if (gpuType) {
@@ -102,8 +103,11 @@ export async function getRentalHistory(
       return [];
     }
 
-    logger.debug(`Fetched ${data?.length || 0} rental history records`);
-    return data || [];
+    // Reverse to get chronological order (oldest first)
+    const sorted = (data || []).reverse();
+
+    logger.debug(`Fetched ${sorted.length} rental history records`);
+    return sorted;
   } catch (err) {
     logger.error('Error fetching rental history:', err);
     return [];
@@ -227,10 +231,11 @@ export async function getHardwareHistory(
   }
 
   try {
+    // Order descending to get newest records first
     let query = supabase
       .from('hardware_prices')
       .select('*')
-      .order('timestamp', { ascending: true })
+      .order('timestamp', { ascending: false })
       .limit(limit);
 
     if (assetId) {
@@ -250,8 +255,11 @@ export async function getHardwareHistory(
       return [];
     }
 
-    logger.debug(`Fetched ${data?.length || 0} hardware history records`);
-    return data || [];
+    // Reverse to get chronological order (oldest first)
+    const sorted = (data || []).reverse();
+
+    logger.debug(`Fetched ${sorted.length} hardware history records`);
+    return sorted;
   } catch (err) {
     logger.error('Error fetching hardware history:', err);
     return [];

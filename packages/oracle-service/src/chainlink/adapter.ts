@@ -31,6 +31,7 @@ export function createChainlinkAdapter(options: AdapterOptions): express.Applica
   // CORS middleware - allow dashboard to fetch from this API
   app.use((req: Request, res: Response, next: NextFunction) => {
     const allowedOrigins = [
+      'https://airentseeker.vercel.app',
       'https://dashboard-mocha-seven-59.vercel.app',
       'http://localhost:5173',
       'http://localhost:3000',
