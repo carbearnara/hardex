@@ -21,7 +21,6 @@ interface UsePricesResult {
   lastUpdate: number | null;
   error: string | null;
   refetch: () => Promise<void>;
-  clearCache: () => void;
 }
 
 // Load cached data from localStorage
@@ -131,12 +130,6 @@ export function usePrices(): UsePricesResult {
     }
   }, [prices]);
 
-  const clearCache = useCallback(() => {
-    localStorage.removeItem(CACHE_KEY_HISTORY);
-    localStorage.removeItem(CACHE_KEY_PRICES);
-    setHistory({} as Record<AssetId, PriceHistory[]>);
-  }, []);
-
   const fetchPrices = useCallback(async () => {
     try {
       const response = await fetch(`${API_BASE}/prices`);
@@ -168,7 +161,6 @@ export function usePrices(): UsePricesResult {
     lastUpdate,
     error,
     refetch: fetchPrices,
-    clearCache,
   };
 }
 

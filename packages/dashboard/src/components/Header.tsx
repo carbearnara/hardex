@@ -1,15 +1,14 @@
-import { Activity, Cpu, RefreshCw, Database, Trash2 } from 'lucide-react';
+import { Activity, Cpu, RefreshCw, Database } from 'lucide-react';
 
 interface HeaderProps {
   isConnected: boolean;
   lastUpdate: number | null;
   onRefresh: () => void;
   cacheCount: number;
-  onClearCache: () => void;
   activeTab?: 'hardware' | 'rental';
 }
 
-export function Header({ isConnected, lastUpdate, onRefresh, cacheCount, onClearCache, activeTab = 'rental' }: HeaderProps) {
+export function Header({ isConnected, lastUpdate, onRefresh, cacheCount, activeTab = 'rental' }: HeaderProps) {
   const formatTime = (timestamp: number) => {
     return new Date(timestamp).toLocaleTimeString();
   };
@@ -59,17 +58,6 @@ export function Header({ isConnected, lastUpdate, onRefresh, cacheCount, onClear
                 <Activity className="w-4 h-4" />
                 <span>{formatTime(lastUpdate)}</span>
               </div>
-            )}
-
-            {/* Clear Cache Button */}
-            {cacheCount > 0 && (
-              <button
-                onClick={onClearCache}
-                className="p-2 hover:bg-slate-800 rounded-lg transition-colors"
-                title="Clear cache"
-              >
-                <Trash2 className="w-5 h-5 text-slate-400 hover:text-red-400" />
-              </button>
             )}
 
             {/* Refresh Button */}

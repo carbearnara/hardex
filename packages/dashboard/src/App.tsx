@@ -11,7 +11,7 @@ import { ASSETS, type AssetId } from './types';
 type TabId = 'hardware' | 'rental';
 
 function App() {
-  const { prices, history, isConnected, lastUpdate, refetch, clearCache } = usePrices();
+  const { prices, history, isConnected, lastUpdate, refetch } = usePrices();
   const [selectedAsset, setSelectedAsset] = useState<AssetId>('GPU_RTX4090');
   const [activeTab, setActiveTab] = useState<TabId>('rental');
 
@@ -19,7 +19,7 @@ function App() {
 
   return (
     <div className="min-h-screen bg-slate-950">
-      <Header isConnected={isConnected} lastUpdate={lastUpdate} onRefresh={refetch} cacheCount={historyCount} onClearCache={clearCache} activeTab={activeTab} />
+      <Header isConnected={isConnected} lastUpdate={lastUpdate} onRefresh={refetch} cacheCount={historyCount} activeTab={activeTab} />
 
       <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
         {/* Tab Navigation */}
