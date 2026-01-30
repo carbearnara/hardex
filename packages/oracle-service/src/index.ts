@@ -85,13 +85,24 @@ async function main() {
       const allPrices = aggregator.getAllPrices();
       const timestamp = Date.now();
 
-      const records = Object.entries(allPrices).map(([assetId, priceData]) => ({
-        asset_id: assetId,
-        timestamp,
-        price: priceData.price,
-        twap: priceData.twap,
-        source_count: priceData.sourceCount,
-      }));
+      const records: Array<{
+        asset_id: string;
+        timestamp: number;
+        price: number;
+        twap: number;
+        source_count: number;
+      }> = [];
+
+      // getAllPrices returns a Map, so iterate with forEach
+      allPrices.forEach((priceData, assetId) => {
+        records.push({
+          asset_id: assetId,
+          timestamp,
+          price: priceData.price,
+          twap: priceData.twap,
+          source_count: priceData.sourceCount,
+        });
+      });
 
       if (records.length > 0) {
         await storeHardwarePrices(records);
