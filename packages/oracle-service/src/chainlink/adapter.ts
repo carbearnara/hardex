@@ -10,6 +10,7 @@ import {
 } from './response.js';
 import { rentalRouter } from '../api/rental.js';
 import { createLogger } from '../utils/logger.js';
+import { getHardwareHistory, getSupabase } from '../storage/supabase.js';
 import { fetchViaScraperApi, isScraperApiConfigured } from '../adapters/scraper-utils.js';
 import * as cheerio from 'cheerio';
 
@@ -181,6 +182,44 @@ export function createChainlinkAdapter(options: AdapterOptions): express.Applica
       prices: result,
       timestamp: Date.now(),
     });
+  });
+
+  // Get hardware price history
+  app.get('/prices/history', async (req: Request, res: Response) => {
+    if (!getSupabase()) {
+      return res.status(503).json({
+        error: 'History storage not configured',
+        message: 'Supabase is not configured for hardware price history.',
+      });
+    }
+
+    const { assetId, startTime, endTime, limit } = req.query;
+
+    try {
+      const history = await getHardwareHistory(
+        assetId as string | undefined,
+        startTime ? parseInt(startTime as string, 10) : undefined,
+        endTime ? parseInt(endTime as string, 10) : undefined,
+        limit ? parseInt(limit as string, 10) : 1000
+      );
+
+      const formatted = history.map((record) => ({
+        assetId: record.asset_id,
+        timestamp: record.timestamp,
+        price: record.price,
+        twap: record.twap,
+        sourceCount: record.source_count,
+      }));
+
+      res.json({
+        history: formatted,
+        count: formatted.length,
+        source: 'supabase',
+      });
+    } catch (error) {
+      logger.error(`Failed to fetch hardware history: ${error}`);
+      res.status(500).json({ error: 'Failed to fetch hardware history' });
+    }
   });
 
   // Get single asset price (convenience endpoint)

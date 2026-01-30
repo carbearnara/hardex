@@ -2,7 +2,7 @@ import { loadConfig } from './config/index.js';
 import { createAdapters, createMockAdapters, createScraperAdapters } from './adapters/index.js';
 import { PriceAggregator } from './aggregator/index.js';
 import { createChainlinkAdapter, startAdapter } from './chainlink/index.js';
-import { initSupabase, storeRentalPrices } from './storage/supabase.js';
+import { initSupabase, storeRentalPrices, storeHardwarePrices } from './storage/supabase.js';
 import { vastaiAdapter } from './adapters/rental-vastai.js';
 import { createLogger } from './utils/logger.js';
 
@@ -77,6 +77,42 @@ async function main() {
     }
   }, config.updateIntervalMs);
 
+  // Store hardware prices to Supabase (every 5 minutes)
+  const HARDWARE_STORE_INTERVAL_MS = 5 * 60 * 1000;
+
+  const storeHardwarePricesSnapshot = async () => {
+    try {
+      const allPrices = aggregator.getAllPrices();
+      const timestamp = Date.now();
+
+      const records = Object.entries(allPrices).map(([assetId, priceData]) => ({
+        asset_id: assetId,
+        timestamp,
+        price: priceData.price,
+        twap: priceData.twap,
+        source_count: priceData.sourceCount,
+      }));
+
+      if (records.length > 0) {
+        await storeHardwarePrices(records);
+        logger.info(`Stored ${records.length} hardware price records to Supabase`);
+      }
+    } catch (error) {
+      logger.error(`Error storing hardware prices: ${error}`);
+    }
+  };
+
+  // Initial hardware price store
+  if (supabase) {
+    // Wait a bit for initial prices to be fetched
+    setTimeout(storeHardwarePricesSnapshot, 10000);
+  }
+
+  // Set up hardware price store interval
+  const hardwareStoreInterval = supabase
+    ? setInterval(storeHardwarePricesSnapshot, HARDWARE_STORE_INTERVAL_MS)
+    : null;
+
   // Set up periodic rental price updates (every 5 minutes)
   const RENTAL_UPDATE_INTERVAL_MS = 5 * 60 * 1000;
 
@@ -122,6 +158,9 @@ async function main() {
     clearInterval(updateInterval);
     if (rentalUpdateInterval) {
       clearInterval(rentalUpdateInterval);
+    }
+    if (hardwareStoreInterval) {
+      clearInterval(hardwareStoreInterval);
     }
     process.exit(0);
   };

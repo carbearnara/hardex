@@ -16,6 +16,16 @@ export interface RentalPriceRecord {
   created_at?: string;
 }
 
+export interface HardwarePriceRecord {
+  id?: number;
+  asset_id: string;
+  timestamp: number;
+  price: number;
+  twap: number;
+  source_count: number;
+  created_at?: string;
+}
+
 let supabase: SupabaseClient | null = null;
 
 export function initSupabase(): SupabaseClient | null {
@@ -180,5 +190,70 @@ export async function getStorageStats(): Promise<{
   } catch (err) {
     logger.error('Error fetching storage stats:', err);
     return { totalRecords: 0, oldestTimestamp: null, newestTimestamp: null, recordsByGpu: {} };
+  }
+}
+
+// Hardware price storage functions
+
+export async function storeHardwarePrices(records: Omit<HardwarePriceRecord, 'id' | 'created_at'>[]): Promise<void> {
+  if (!supabase) {
+    logger.debug('Supabase not configured, skipping hardware price storage');
+    return;
+  }
+
+  try {
+    const { error } = await supabase
+      .from('hardware_prices')
+      .insert(records);
+
+    if (error) {
+      logger.error('Failed to store hardware prices:', error);
+    } else {
+      logger.debug(`Stored ${records.length} hardware price records`);
+    }
+  } catch (err) {
+    logger.error('Error storing hardware prices:', err);
+  }
+}
+
+export async function getHardwareHistory(
+  assetId?: string,
+  startTime?: number,
+  endTime?: number,
+  limit = 1000
+): Promise<HardwarePriceRecord[]> {
+  if (!supabase) {
+    return [];
+  }
+
+  try {
+    let query = supabase
+      .from('hardware_prices')
+      .select('*')
+      .order('timestamp', { ascending: true })
+      .limit(limit);
+
+    if (assetId) {
+      query = query.eq('asset_id', assetId);
+    }
+    if (startTime) {
+      query = query.gte('timestamp', startTime);
+    }
+    if (endTime) {
+      query = query.lte('timestamp', endTime);
+    }
+
+    const { data, error } = await query;
+
+    if (error) {
+      logger.error('Failed to fetch hardware history:', error);
+      return [];
+    }
+
+    logger.debug(`Fetched ${data?.length || 0} hardware history records`);
+    return data || [];
+  } catch (err) {
+    logger.error('Error fetching hardware history:', err);
+    return [];
   }
 }
